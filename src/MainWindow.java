@@ -21,8 +21,6 @@ import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.ItemEvent;
-import java.awt.event.ItemListener;
 import java.io.File;
 import java.util.LinkedList;
 import java.util.regex.Matcher;
@@ -49,7 +47,6 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
-import javax.swing.border.BevelBorder;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 
@@ -560,7 +557,6 @@ public class MainWindow extends JFrame implements ActionListener {
 		
 		/*** CONSTANTS ***/
 		private static final long serialVersionUID = 1L;
-		private final int WIDTH = 25;
 		
 		/*** CLASS DATA MEMBERS ***/
 		// Window elements
@@ -582,7 +578,7 @@ public class MainWindow extends JFrame implements ActionListener {
 			
 			// Populate the dialog box
 			// Create and populate the list model
-			DefaultListModel model = new DefaultListModel();
+			DefaultListModel<AnimeTitle> model = new DefaultListModel<AnimeTitle>();
 			for (int i = 0; i < titleList.size(); i++)
 				model.add(i, titleList.get(i));
 			
@@ -660,13 +656,27 @@ public class MainWindow extends JFrame implements ActionListener {
 			
 			// Create the labels for the About information
 			String msg = "<html><h2>" + ConfigMgr.getAppName() + "</h2><hr/>";
-			msg += "<strong>Version:</strong> " + ConfigMgr.getVersion() + "<br/>";
-			msg += "<strong>Author:</strong> Chris Workman<br/>";
-			msg += "Copyright 2011";
+			msg += "<bold>Version:</bold> " + ConfigMgr.getVersion() + "<br/>";
+			msg += "<bold>Author:</bold> Chris Workman<br/>";
+			msg += "Copyright (c) 2011<br/>";
+			msg += "<br/>";
+			msg += "This program is free software: you can redistribute it and/or modify<br/>";
+			msg += "it under the terms of the GNU General Public License as published by<br/>";
+			msg += "the Free Software Foundation, either version 3 of the License, or<br/>";
+			msg += "(at your option) any later version.<br/>";
+			msg += "<br/>";
+			msg += "This program is distributed in the hope that it will be useful,<br/>";
+			msg += "but WITHOUT ANY WARRANTY; without even the implied warranty of<br/>";
+			msg += "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the<br/>";
+			msg += "GNU General Public License for more details.<br/>";
+			msg += "<br/>";
+			msg += "You should have received a copy of the GNU General Public License<br/>";
+			msg += "along with this program.  If not, see <a href='http://www.gnu.org/licenses/'>http://www.gnu.org/licenses</a><br/>";
 			JLabel text = new JLabel(msg);
 			
 			// Add the labels to the panel
 			panel.add(text);
+			panel.setBorder(BorderFactory.createEtchedBorder());
 			
 			// Add panel to window
 			this.getContentPane().add(panel);
@@ -682,6 +692,7 @@ public class MainWindow extends JFrame implements ActionListener {
 			// Add the button to the pane
 			buttons.add(Box.createHorizontalGlue());
 			buttons.add(bOk);
+			buttons.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
 			
 			// Add button panel to window
 			this.getContentPane().add(buttons, BorderLayout.SOUTH);
