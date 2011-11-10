@@ -36,6 +36,7 @@ public class CommMgr {
 	private static final String		SERVER			=	"api.anidb.net";
 	private static final int		SERVER_PORT 	=	9000;
 	private static final String		PROTOVER		=	"3";
+	private static final int		BUF_SIZE		=	1400;
 	
 	/*** PACKET CODE DEFINITIONS ***/
 	// Can occur in any commmand
@@ -62,6 +63,10 @@ public class CommMgr {
 	public static final int			LOGGED_OUT					=	203;
 	public static final int			NOT_LOGGED_IN				= 	403;
 	
+	// ANIME codes
+	public static final int			ANIME_SUCCESS				= 	230;
+	public static final int			ANIME_NOT_FOUND				=	330;
+	
 	// Client generated codes
 	public static final int			CLIENT_ERROR				= 	000;
 	
@@ -76,8 +81,8 @@ public class CommMgr {
 		DatagramPacket packet;
 		
 		// Build data buffer for packet
-		String pstr = type + " " + msg;
-		byte[] buf = new byte[1400];
+		String pstr = type + " " + msg + "\n";
+		byte[] buf = new byte[BUF_SIZE];
 		buf = pstr.getBytes();
 		
 		// Attempt connection to API server	
@@ -86,9 +91,13 @@ public class CommMgr {
 			server = InetAddress.getByName(SERVER);
 			socket = new DatagramSocket(ConfigMgr.getPort());
 			
+			System.out.println("Sending packet: " + pstr);
 			// Build the packet and send it to the API server
 			packet = new DatagramPacket(buf, buf.length, server, SERVER_PORT);
 			socket.send(packet);
+			
+			// Clear the buffer
+			buf = new byte[BUF_SIZE];
 			
 			// Receive response from the API server
 			packet = new DatagramPacket(buf, buf.length);
@@ -98,9 +107,10 @@ public class CommMgr {
 			socket.close();
 			
 			// Build AniPacket from response message
-			String mess = new String(buf);
-			int code = Integer.parseInt(mess.substring(0,2));
-			String reply = mess.substring(4);
+			String mess = new String(buf).trim();
+			System.out.println("Received Packet: " + mess);
+			int code = Integer.parseInt(mess.substring(0,mess.indexOf(" ")));
+			String reply = mess.substring(mess.indexOf(" "));
 			response = new AniPacket(code, reply);
 		}
 		catch (UnknownHostException e) {
@@ -131,8 +141,7 @@ public class CommMgr {
 		String prot = "&protover=" + PROTOVER;
 		String client = "&client=" + ConfigMgr.getClientName();
 		String clientver = "&clientver=" + ConfigMgr.getVersion();
-		String nat = "&nat=1";
-		String msg = user+pass+prot+client+clientver+nat;
+		String msg = user+pass+prot+client+clientver;
 		
 		// Send AUTH packet
 		response = sendPacket("AUTH", msg);
@@ -148,6 +157,10 @@ public class CommMgr {
 		// Return response packet
 		return response;
 	} // end sendAuth
+	
+	public static boolean isConnected() {
+		return connected;
+	}
 	
 	public static AniPacket sendLogout() {
 		AniPacket response;
@@ -172,4 +185,41 @@ public class CommMgr {
 		return response;
 	} // end sendLogout
 	
+	public static AniPacket sendAnime(int aid) {
+		AniPacket 	response;		// The response packet
+		String		msg;			// The packet to send
+		
+		msg = "aid=" + String.valueOf(aid);
+		msg += "&s=" + sessionID;
+		
+		response = sendPacket("ANIME", msg);
+		
+		return response;
+	} // end sendAnime
+	
+	public static AniPacket sendEpisode(int aid, int epno) {
+		AniPacket response;			// The response packet
+		String msg;					// The packet info to send
+		
+		msg = "aid=" + String.valueOf(aid);
+		msg += "&epno=" + String.valueOf(epno);
+		msg += "&s=" + sessionID;
+		
+		response = sendPacket("EPISODE", msg);
+		
+		return response;
+	} // end sendEpisode
+	
+	public static AniPacket sendAnimeDesc(int aid, int part) {
+		AniPacket response;
+		String msg;
+		
+		msg = "aid=" + String.valueOf(aid);
+		msg += "&part=" + String.valueOf(part);
+		msg += "&s=" + sessionID;
+		
+		response = sendPacket("ANIMEDESC", msg);
+		
+		return response;
+	} // end sendAnimeDesc
 } // end class CommMgr

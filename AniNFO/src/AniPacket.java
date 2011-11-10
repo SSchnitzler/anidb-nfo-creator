@@ -31,6 +31,7 @@ public class AniPacket {
 		
 		switch (code) {
 			case 000:
+			case 50:
 			case 330:
 			case 333:
 			case 340:

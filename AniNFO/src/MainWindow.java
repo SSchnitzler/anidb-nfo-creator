@@ -45,7 +45,6 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.JPasswordField;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
@@ -56,15 +55,16 @@ import javax.swing.event.ListSelectionListener;
 
 public class MainWindow extends JFrame implements ActionListener {
 	/*** CONSTANT ***/
-	private static final long serialVersionUID = 1L;
+	private static final long 		serialVersionUID = 1L;
 	private static final String		CACHE_FILE = "cache.dat";
 
 	/*** CLASS DATA MEMBERS ***/
-	private File[] 					files 		= null;
-	private LinkedList<String>		fileTitles;
-	private LinkedList<FileDetails>	fileDetails;
-	private AnimeTitles				animeTitles;
-	private SeriesList				seriesCache;				// Cache
+	private LinkedList<File>		files;						// List of selected files
+	private LinkedList<String>		fileTitles;					// Titles of selected files
+	private LinkedList<FileDetails>	fileDetails;				// Details about selected files
+	private AnimeTitles				animeTitles;				// Anime title cache from AniDB download
+	private SeriesList				seriesCache;				// Cache of details looked up from AniDB
+	private LinkedList<String>		seriesList;					// List of individual series to create NFO files for
 	
 	/*** WINDOW COMPONENTS ***/
 	// Menu Bar Components
@@ -86,6 +86,13 @@ public class MainWindow extends JFrame implements ActionListener {
 	public MainWindow() {
 		// Load config settings
 		int result = ConfigMgr.loadConfig();
+		
+		// Initialize our file listing
+		files = new LinkedList<File>();
+		
+		// Initialize file details and series id listings
+		seriesList = new LinkedList<String>();
+		fileDetails = new LinkedList<FileDetails>();
 		
 		// Check results of config loading
 		// Is this the first load (we have a new config file)
@@ -319,18 +326,58 @@ public class MainWindow extends JFrame implements ActionListener {
 	} // end connect
 	
 	private void loadFiles() {
+		// Initialize new fileTitles listing
+		fileTitles = new LinkedList<String>();
+		
 		// Get file list from File Browser
-		JFileChooser ofDialog = new JFileChooser();
+		JFileChooser ofDialog = new JFileChooser(ConfigMgr.getDefaultPath());
+		ofDialog.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
 		ofDialog.setMultiSelectionEnabled(true);
 		ofDialog.showOpenDialog(this);
 		
-		files = ofDialog.getSelectedFiles();
+		// list for storing selected files and directories to process
+		File[] selectedFiles = ofDialog.getSelectedFiles();
 		
-		parseTitles();
+		for (int i = 0; i < selectedFiles.length; i++) {
+			// Check if this is a file or directory
+			if (selectedFiles[i].isDirectory()) {
+				// Process each file in the directory
+				File[] contents = selectedFiles[i].listFiles();
+				for (int n = 0; n < contents.length; n++)
+					if (contents[n].isFile())
+						processFile(contents[n]);
+			} // End if directory
+			else if (selectedFiles[i].isFile())
+				processFile(selectedFiles[i]);
+		} // end For
+		
+		// Get the AniDB titles and id from downloaded title list
+		getTitles();
+		// Get full details from AniDB site
+		//getDetails();
+		
+		// Refresh the file listing
+		infoPanel.refreshFileList();
 	} // end loadFiles
 	
-	private void parseTitles() {
-		FileDetails file;
+	private void processFile(File file) {
+		// To ensure existing NFO files are ignored
+		String filename = file.getName().toLowerCase();
+		String ext = filename.substring(filename.lastIndexOf('.'));
+		
+		// If it is an NFO file, ignore it
+		if (ext.compareTo(".nfo") == 0) {
+			return;
+		}
+		
+		// Add the file to our file list
+		files.add(file);
+		// Parse the title
+		parseTitle(file);
+	} // end processFile
+	
+	private void parseTitle(File file) {
+		FileDetails fDetail;
 		String 	filename	= null;
 		String 	series		= null;
 		int 	epno		= 0;
@@ -338,106 +385,98 @@ public class MainWindow extends JFrame implements ActionListener {
 		String temp;
 		boolean isMovie		= false;
 		
-		// Initialize filetitles
-		fileTitles = new LinkedList<String>();
-		
-		// If we have files check for titles
-		if (files != null) {
-			fileDetails = new LinkedList<FileDetails>();
+			// Get the filename, without extension, replace . and _ with space
+			filename = file.getName();
 			
-			// Process each file for relevant information
-			for (int i = 0; i < files.length; i++) {
-				// Get the filename, without extension, replace . and _ with space
-				filename = files[i].getName();
-				temp = filename.substring(0,filename.lastIndexOf('.'));
-				temp = filename.replace('.', ' ');
-				temp = temp.replace('_', ' ');
+			temp = filename.substring(0,filename.lastIndexOf('.'));
+			temp = filename.replace('.', ' ');
+			temp = temp.replace('_', ' ');
 
-				// Try finding match for E##
-				String matchstr = filename.replace('.', ' ');
-				matchstr = matchstr.replace('_', ' ');
-				String regex = "\\s+E\\d{2,}\\s+"; 		// First boxee format requires E followed by two numbers for the episode number
-				Pattern pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
-				Matcher match = pattern.matcher(matchstr);
+			// Try finding match for E##
+			String matchstr = filename.replace('.', ' ');
+			matchstr = matchstr.replace('_', ' ');
+			String regex = "\\s+E\\d{2,}\\s+"; 		// First boxee format requires E followed by two numbers for the episode number
+			Pattern pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
+			Matcher match = pattern.matcher(matchstr);
+			
+			// Check if a match was found
+			if (match.find()) {
+				temp = match.group().trim();
+				series = matchstr.substring(0,match.start()).trim();
+				try {
+					epno = Integer.parseInt(temp.substring(1));
+				}
+				catch (NumberFormatException e) {
+					isMovie = true;
+				}
+			} // end match
+			// If not found then try second format
+			else {
+				regex = "\\s+\\d+x\\d{2,}\\s+";		// Second boxee format
+				pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
+				match = pattern.matcher(matchstr);
 				
-				// Check if a match was found
+				// Check for a match
 				if (match.find()) {
 					temp = match.group().trim();
-					series = matchstr.substring(0,match.start()).trim();
+					String[] words = temp.split("[xX]");
+					season = Integer.parseInt(words[0]);
+					series = matchstr.substring(0,matchstr.indexOf(temp));
 					try {
-						epno = Integer.parseInt(temp.substring(1));
+						epno = Integer.parseInt(words[1]);
 					}
 					catch (NumberFormatException e) {
 						isMovie = true;
 					}
-				} // end match
-				// If not found then try second format
-				else {
-					regex = "\\s+\\d+x\\d{2,}\\s+";		// Second boxee format
-					pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
-					match = pattern.matcher(matchstr);
-					
-					// Check for a match
-					if (match.find()) {
-						temp = match.group().trim();
-						String[] words = temp.split("[xX]");
-						season = Integer.parseInt(words[0]);
-						series = matchstr.substring(0,matchstr.indexOf(temp));
-						try {
-							epno = Integer.parseInt(words[1]);
-						}
-						catch (NumberFormatException e) {
-							isMovie = true;
-						}
-					} // end if
-					else {
-						series = "Did not find a naming convention match for " + filename;
-					}
-				} // end if matches
-				
-				if (isMovie)
-					file = new FileDetails(filename, series);
-				else
-					file = new FileDetails(filename, series, epno);
-
-				if (season != 1) 
-					file.setSeason(season);
-				fileDetails.add(file);
-				
-				// Add the title to the title list if it doesn't exist already
-				if (!fileTitles.contains(series))
-					fileTitles.add(series);
-			} // end for
-
-			// Iterate through the list of file series titles found
-			// and associate the correct AniDB entry with each file
-			for (int i = 0; i < fileTitles.size(); i ++) {
-				AnimeTitles titles = animeTitles.searchTitles(fileTitles.get(i));
-				
-				// If there is more than one title matched provide a list to select
-				// from.
-				if (titles.size() > 1) {
-					TitleSelector tsWnd = new TitleSelector(titles);
-					AnimeTitle title = tsWnd.showDialog();
-					
-					if (title != null)
-						linkFileDetails(fileTitles.get(i), title);
-					else
-						JOptionPane.showMessageDialog(this,	"No anime title was selected from the list.", "Error - No Selection Made", JOptionPane.ERROR_MESSAGE);
 				} // end if
-				// Only 1 match was found, just use it.
-				else if (titles.size() != 0) {
-					linkFileDetails(fileTitles.get(i), titles.getFirst());
-				} // end else
 				else {
-					JOptionPane.showMessageDialog(this, "There were no matching anime titles found in the database.", "Error - No Match Found", JOptionPane.ERROR_MESSAGE);
+					series = "Did not find a naming convention match for " + filename;
 				}
-			} // end for
+			} // end if matches
 			
-			// Refresh the file list
-			infoPanel.refreshFileList();
-		} // end if
+			if (isMovie)
+				fDetail = new FileDetails(filename, series);
+			else
+				fDetail = new FileDetails(filename, series, epno);
+
+			if (season != 1) 
+				fDetail.setSeason(season);
+			
+			// Store the path for the file
+			fDetail.setPath(file.getParent());
+			fileDetails.add(fDetail);
+			
+			// Add the title to the title list if it doesn't exist already
+			if (!fileTitles.contains(series))
+				fileTitles.add(series);
 	} // end parseTitles
+	
+	private void getTitles() {
+		// Iterate through the list of file series titles found
+		// and associate the correct AniDB entry with each file
+		for (int i = 0; i < fileTitles.size(); i ++) {
+			AnimeTitles titles = animeTitles.searchTitles(fileTitles.get(i));
+			
+			// If there is more than one title matched provide a list to select
+			// from.
+			if (titles.size() > 1) {
+				TitleSelector tsWnd = new TitleSelector(titles);
+				AnimeTitle title = tsWnd.showDialog();
+				
+				if (title != null)
+					linkFileDetails(fileTitles.get(i), title);
+				else
+					JOptionPane.showMessageDialog(this,	"No anime title was selected from the list.", "Error - No Selection Made", JOptionPane.ERROR_MESSAGE);
+			} // end if
+			// Only 1 match was found, just use it.
+			else if (titles.size() != 0) {
+				linkFileDetails(fileTitles.get(i), titles.getFirst());
+			} // end else
+			else {
+				JOptionPane.showMessageDialog(this, "There were no matching anime titles found in the database.", "Error - No Match Found", JOptionPane.ERROR_MESSAGE);
+			}
+		} // end for
+	} // end getTitles
 	
 	private void linkFileDetails(String title, AnimeTitle anime) {
 		// Check each file for matching title, update details from the provided anime
@@ -448,7 +487,126 @@ public class MainWindow extends JFrame implements ActionListener {
 				file.setAID(anime.getID());
 			} // end if
 		} // end for
+		
+		if (!seriesList.contains(String.valueOf(anime.getID())))
+			seriesList.add(String.valueOf(anime.getID()));
 	} // end linkFileDetails
+	
+	private void getDetails() {
+		// Connect to AniDB incase we need to use it
+		connect();
+		
+		// Get series details for the individual series in the seriesList
+		for (int i = 0; i < seriesList.size(); i++) {
+			int aid = Integer.parseInt(seriesList.get(i));
+			SeriesEntry series = seriesCache.getSeries(aid);
+			
+			if (series == null) {
+				// Request series details from AniDB
+				AniPacket response = CommMgr.sendAnime(aid);
+				
+				// Handle packet response
+				int code = response.getCode();
+				String msg;
+				String eTitle;
+				String reason;
+				String reply = response.getReply();
+
+				// If the response is successful
+				if (code == CommMgr.ANIME_SUCCESS) {
+					String values[] = reply.split("|");
+					String title = values[14];
+					series = new SeriesEntry(title, aid);
+					
+					String genre[] = values[18].split(",");
+					for (int g = 0; g < genre.length; g++)
+						series.addGenre(genre[g]);
+					
+					seriesCache.addSeries(series);
+				}
+				else {
+					switch (code) {
+					case CommMgr.CLIENT_ERROR:
+						msg = reply;
+						eTitle = "Client Error";
+						break;
+					case CommMgr.ILLEGAL_INPUT_ACCESS_DENIED:	
+						msg = "The server did not recognize the data sent.";
+						eTitle = "Illegal Input";
+						break;
+					case CommMgr.INTERNAL_SERVER_ERROR:
+						msg = "An internal server error was encountered";
+						eTitle = "Internal Server Error";
+						break;
+					case CommMgr.OUT_OF_SERVICE:
+						msg = "The server is currently down for maintenance.\nPlease try again later.";
+						eTitle = "Server Out of Service";
+						break;
+					case CommMgr.SERVER_BUSY:
+						msg = "The server is too busy to process your request at this time.\nPlease try again later.";
+						eTitle = "Server Busy";
+						break;
+					case CommMgr.UNKNOWN_COMMAND:
+						msg = "The command was not recongnized by the server.";
+						eTitle = "Unknown Command";
+						break;
+					case CommMgr.BANNED:
+						reason = reply.substring(reply.indexOf('\n'));
+						msg = "Your account has been banned by the AniDB server.\nReason: " + reason;
+						eTitle = "Account Banned";
+						break;
+					case CommMgr.CLIENT_OUTDATED:
+						msg = "The client uses an outdated version of the AniDB API.\nPlease update your client.";
+						eTitle = "Version Outdated";
+						break;
+					case CommMgr.CLIENT_BANNED:
+						reason = reply.substring(reply.indexOf('-')+2);
+						msg = "This client has been banned.\nReason: " + reason;
+						eTitle = "Client Banned";
+						break;
+					case CommMgr.LOGIN_REQUIRED:
+						msg = "The AniNFO client is not currently logged into the AniDB server.\nPlease check your username and password in Preferences.";
+						eTitle = "Login Required";
+						break;
+					case CommMgr.ACCESS_DENIED:
+						msg = "Access to the AniDB server has been denied.\nPlease check your username and password in Preferences.";
+						eTitle = "Access Denied";
+						break;
+					case CommMgr.INVALID_SESSION:
+						msg = "The session ID is invalid.\nPlease try restarting the AniDB client.";
+						eTitle = "Invalid Session";
+						break;
+					case CommMgr.ANIME_NOT_FOUND:
+						msg = "The anime series was not found in the AniDB database.\nSeries ID: " + aid;
+						eTitle = "Invalid Session";
+						break;
+					default:
+						msg = "An unknown error has occurred.\nCode: " + code + "\nReply: " + reply;
+						eTitle = "Unknown Error";
+						break;
+					} // end switch
+					
+					JOptionPane.showMessageDialog(this, msg, "Error - " + eTitle, JOptionPane.ERROR_MESSAGE);
+				} // end else (error)
+			} // end if (series==null)
+		} // end for (seriesList)
+		
+		// Setup empty list of files to get from online database
+		LinkedList<FileDetails> checkDB = new LinkedList<FileDetails>();
+		
+		// process each title in the file list
+		for (int i = 0; i < fileDetails.size(); i++) {
+			// Get the current fileDetails and check cache for series info
+			FileDetails file = fileDetails.get(i);
+			EpisodeEntry ep = seriesCache.getEpisode(file.getAID(), file.getEpno());
+			
+			// If the episode was not already cached then
+			// add it to the list to get from the database
+			if (ep == null) {
+				checkDB.add(file);
+			} // end if
+		} // end for
+	}
 	
 	@Override
 	public void dispose() {
@@ -571,8 +729,12 @@ public class MainWindow extends JFrame implements ActionListener {
 			// Additional details for series episodes
 			if (!file.isMovie()) {
 				text += "Season: " + file.getSeason() + "\n";
-				text += "Episode: " + file.getEpno();
+				text += "Episode: " + file.getEpno() + "\n";
 			}
+			
+			// Display the filename and path details of this file
+			text += "Filename: " + file.getName() + "\n"; 
+			text += "Path: " + file.getPath() + "\n";
 			
 			seriesText.setText(text);
 			seriesText.repaint();
@@ -580,9 +742,10 @@ public class MainWindow extends JFrame implements ActionListener {
 
 		@Override
 		public void valueChanged(ListSelectionEvent e) {
-			int index = e.getFirstIndex();
-			FileDetails file = fileDetails.get(index);
-			setDetails(file);
+			if (e.getSource() == fileList) {
+				FileDetails file = fileList.getSelectedValue();
+				setDetails(file);
+			} // end if
 		}
 		
 	} // end class InfoPanel
@@ -623,6 +786,7 @@ public class MainWindow extends JFrame implements ActionListener {
 			listTitles.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 			listTitles.setLayoutOrientation(JList.VERTICAL);
 			listTitles.setVisibleRowCount(10);
+			listTitles.setFixedCellWidth(200);
 			JScrollPane scrollList = new JScrollPane(listTitles);
 			list.add(scrollList);
 			
@@ -690,7 +854,7 @@ public class MainWindow extends JFrame implements ActionListener {
 			
 			// Create the labels for the About information
 			String msg = "<html><h2>" + ConfigMgr.getAppName() + "</h2><hr/>";
-			msg += "<bold>Version:</bold> " + ConfigMgr.getVersion() + "<br/>";
+			msg += "<bold>Version:</bold> " + ConfigMgr.getAppVersion() + "<br/>";
 			msg += "<bold>Author:</bold> Chris Workman<br/>";
 			msg += "Copyright (c) 2011<br/>";
 			msg += "<br/>";
@@ -765,7 +929,7 @@ public class MainWindow extends JFrame implements ActionListener {
 		
 		// Window components
 		private JTextField		user;
-		private JPasswordField	pass;
+		private JTextField		pass;
 		private JTextField		defaultPath;
 		private JButton			bBrowse;
 		private JCheckBox		autoUpdate;
@@ -796,13 +960,14 @@ public class MainWindow extends JFrame implements ActionListener {
 			
 			// password components
 			JLabel passLabel = new JLabel("AniDB Password");
-			pass = new JPasswordField(20);
+			pass = new JTextField(20);
 			pass.setText(ConfigMgr.getPass());
 			
 			// Default Path
 			JLabel defaultLabel = new JLabel("Base Video Folder");
 			defaultPath = new JTextField(30);
 			bBrowse = new JButton("Browse");
+			bBrowse.addActionListener(this);
 			defaultPath.setText(ConfigMgr.getDefaultPath());
 			
 			// Auto Update
@@ -885,7 +1050,7 @@ public class MainWindow extends JFrame implements ActionListener {
 			if (e.getSource() == bOk) {
 				// Update config settings if OK was clicked
 				ConfigMgr.setUser(user.getText());
-				ConfigMgr.setPass(pass.getPassword().toString());
+				ConfigMgr.setPass(pass.getText().toString());
 				ConfigMgr.setAutoUpdate(autoUpdate.isSelected());
 				boolean check = ConfigMgr.setDefaultPath(defaultPath.getText());
 				if (check) {
@@ -900,6 +1065,14 @@ public class MainWindow extends JFrame implements ActionListener {
 				retValue = ConfigDlg.CANCEL;
 				dispose();
 			} // end cancel
+			if (e.getSource() == bBrowse) {
+				JFileChooser fcDialog = new JFileChooser(new File(defaultPath.getText()));
+				fcDialog.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+				int retVal = fcDialog.showOpenDialog(this);
+				
+				if (retVal == JFileChooser.APPROVE_OPTION)
+					defaultPath.setText(fcDialog.getSelectedFile().getPath());
+			}
 		} // end ActionPerformed
 		
 		public int showDialog()	{

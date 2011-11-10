@@ -19,6 +19,7 @@
 public class FileDetails {
 	/*** CLASS DATA MEMBERS ***/
 	private String		filename;				// The filename without the extension
+	private String 		filepath;				// Path the file is stored in
 	private int			aID;					// The anime series ID from AniDB linked to this file
 	private String		series;					// Anime series name linked to this file
 	private int			epno;					// The episode number linked to this file
@@ -37,13 +38,13 @@ public class FileDetails {
 		movie = true;
 	}
 	
-	public void setFilename(String name) {
+	public void setPath(String path) {
+		filepath = path;
+	}
+	
+	public void setName(String name) {
 		filename = name;
 	} // end setFilename
-	
-	public String getFilename() {
-		return filename;
-	} // end getFilename
 	
 	public void setAID(int ID) {
 		aID = ID;
@@ -83,6 +84,14 @@ public class FileDetails {
 	
 	public boolean isMovie() {
 		return movie;
+	}
+	
+	public String getName() {
+		return filename;
+	}
+	
+	public String getPath() {
+		return filepath;
 	}
 	
 	public String toString() {

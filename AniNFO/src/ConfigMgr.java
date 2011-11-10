@@ -53,12 +53,15 @@ public class ConfigMgr {
 	 * Such as: 0.01 BETA
 	 * @return Formatted string describing application version
 	 */
-	public static String getVersion() {
+	public static String getAppVersion() {
 		String ver = APP_VERSION + " " + VERSION_TYPE;
 		
 		return ver;
 	} // end getVersion
 	
+	public static String getVersion() {
+		return String.valueOf(VERSION);
+	}
 	/***
 	 * Returns the App Name of the application
 	 * @return Application name
