@@ -52,6 +52,22 @@ public class AnimeTitles {
 		return results;
 	} // end searchTitles
 
+	public AnimeTitle searchTitles(int aid) {
+		AnimeTitle result = null;
+		
+		// Loop through the list of titles, if title matches string
+		// add to the result list
+		for (int i = 0; i < titleCount; i++) {
+			AnimeTitle temp = titleList.get(i);
+			if (temp.getID() == aid) {
+				result = temp;
+			} // end if
+		} // end for
+		
+		// Return the results
+		return result;		
+	}
+	
 	public int size() {
 		return titleCount;
 	} // end length

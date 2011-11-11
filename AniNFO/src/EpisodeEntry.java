@@ -29,7 +29,7 @@ public class EpisodeEntry implements Serializable {
 	private int season;				// Episode Season, used for special episodes in Boxee
 	private int length;				// Length of the episode
 	private String title;			// Episode title
-	private int aired;				// Date the episode aired
+	private long aired;				// Date the episode aired
 	
 	// Constructor
 	public EpisodeEntry(int new_eid) {
@@ -78,7 +78,7 @@ public class EpisodeEntry implements Serializable {
 		title = new_title;
 	}
 	
-	public void setAired(int new_date) {
+	public void setAired(long new_date) {
 		aired = new_date;
 	}
 	
@@ -102,7 +102,7 @@ public class EpisodeEntry implements Serializable {
 		return length;
 	}
 	
-	public int getAired() {
+	public long getAired() {
 		return aired;
 	}
 	

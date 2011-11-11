@@ -18,6 +18,7 @@
  */
 import java.awt.BorderLayout;
 import java.awt.Container;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -28,7 +29,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -212,6 +213,8 @@ public class MainWindow extends JFrame implements ActionListener {
 				ObjectInputStream in = new ObjectInputStream(fis);
 				
 				seriesCache = (SeriesList)in.readObject();
+				
+				in.close();
 			}
 			catch (IOException e) {
 				JOptionPane.showMessageDialog(this, "Unable to read from the cached data file. The file may be corrupt.\n" +
@@ -337,28 +340,31 @@ public class MainWindow extends JFrame implements ActionListener {
 		JFileChooser ofDialog = new JFileChooser(ConfigMgr.getDefaultPath());
 		ofDialog.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
 		ofDialog.setMultiSelectionEnabled(true);
-		ofDialog.showOpenDialog(this);
+		int result = ofDialog.showOpenDialog(this);
 		
-		// list for storing selected files and directories to process
-		File[] selectedFiles = ofDialog.getSelectedFiles();
-		
-		for (int i = 0; i < selectedFiles.length; i++) {
-			// Check if this is a file or directory
-			if (selectedFiles[i].isDirectory()) {
-				// Process each file in the directory
-				File[] contents = selectedFiles[i].listFiles();
-				for (int n = 0; n < contents.length; n++)
-					if (contents[n].isFile())
-						processFile(contents[n]);
-			} // End if directory
-			else if (selectedFiles[i].isFile())
-				processFile(selectedFiles[i]);
-		} // end For
-		
-		// Get the AniDB titles and id from downloaded title list
-		getTitles();
-		// Get full details from AniDB site
-		getDetails();
+		// Only continue if OK was selected
+		if (result == JFileChooser.APPROVE_OPTION) {
+			// list for storing selected files and directories to process
+			File[] selectedFiles = ofDialog.getSelectedFiles();
+			
+			for (int i = 0; i < selectedFiles.length; i++) {
+				// Check if this is a file or directory
+				if (selectedFiles[i].isDirectory()) {
+					// Process each file in the directory
+					File[] contents = selectedFiles[i].listFiles();
+					for (int n = 0; n < contents.length; n++)
+						if (contents[n].isFile())
+							processFile(contents[n]);
+				} // End if directory
+				else if (selectedFiles[i].isFile())
+					processFile(selectedFiles[i]);
+			} // end For
+			
+			// Get the AniDB titles and id from downloaded title list
+			getTitles();
+			// Get full details from AniDB site
+			getDetails();
+		} // end if result
 		
 		// Refresh the file listing
 		infoPanel.refreshFileList();
@@ -499,6 +505,9 @@ public class MainWindow extends JFrame implements ActionListener {
 	} // end linkFileDetails
 	
 	private void getDetails() {
+		// It is possible this will take some time. Set to the wait cursor
+		this.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+		
 		// Connect to AniDB incase we need to use it
 		connect();
 		
@@ -523,6 +532,12 @@ public class MainWindow extends JFrame implements ActionListener {
 					String details = reply.substring(reply.indexOf('\n')).trim();
 					String[] values = details.split("\\|");
 					String title = values[14];
+					
+					if (title.equals("")) {
+						AnimeTitle anime = animeTitles.searchTitles(aid);
+						title = anime.getMainTitle();
+					}
+					
 					series = new SeriesEntry(title, aid);
 					
 					int rating = Integer.parseInt(values[4]);
@@ -650,11 +665,6 @@ public class MainWindow extends JFrame implements ActionListener {
 				String details = reply.substring(reply.indexOf('\n')).trim();
 				String[] values = details.split("\\|");
 				
-				for (int idx = 0; idx < values.length; idx++)
-					System.out.print("VALUES[" + idx + "] = " + values[idx] + "; ");
-				System.out.println();
-				
-				
 				int eid = Integer.parseInt(values[0]);
 				int length = Integer.parseInt(values[2]);
 				String eps = values[5];
@@ -665,7 +675,7 @@ public class MainWindow extends JFrame implements ActionListener {
 				episode.setEpno(eps);
 				episode.setTitle(title);
 				episode.setLength(length);
-				episode.setAired(aired);
+				episode.setAired((long)aired * 1000);
 				
 				SeriesEntry series = seriesCache.getSeries(aid);
 				series.getEpisodes().addEpisode(episode);
@@ -742,6 +752,9 @@ public class MainWindow extends JFrame implements ActionListener {
 			} // end else
 		} // end for
 		
+		// Return the cursor to normal
+		this.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+		
 		// Disconnect from AniDB
 		CommMgr.sendLogout();
 	} // end getDetails
@@ -754,6 +767,8 @@ public class MainWindow extends JFrame implements ActionListener {
 			FileOutputStream fos = new FileOutputStream(file);
 			ObjectOutputStream out = new ObjectOutputStream(fos);
 			out.writeObject(seriesCache);
+			out.flush();
+			out.close();
 		}
 		catch (IOException e) {
 			JOptionPane.showMessageDialog(this,	"Unable to update the cache file.\nYour cache file may be corrupt and is being deleted.",
@@ -893,9 +908,10 @@ public class MainWindow extends JFrame implements ActionListener {
 			text += "Episode Length: " + episode.getLength() + "m\n";
 			
 			// Displaying the date requires some formatting
-			SimpleDateFormat sdf = new SimpleDateFormat("YYYY-MM-DD");
-			Date date = new Date(episode.getAired());
-			String aired = sdf.format(date);
+			SimpleDateFormat sdf = new SimpleDateFormat("MMM d, yyyy");
+			Calendar cal = Calendar.getInstance();
+			cal.setTimeInMillis(episode.getAired());
+			String aired = sdf.format(cal.getTime());
 			text += "Episode Air Date: " + aired + "\n";
 			
 			seriesText.setText(text);
@@ -1169,7 +1185,7 @@ public class MainWindow extends JFrame implements ActionListener {
 			
 			// Auto Update
 			JPanel updatePanel = new JPanel();
-			updatePanel.setBorder(BorderFactory.createTitledBorder("XML File Updating"));
+			updatePanel.setBorder(BorderFactory.createTitledBorder("Anime Titles File Updating"));
 			updatePanel.add(autoUpdate);
 			
 			// Add all these components to a config settings panel

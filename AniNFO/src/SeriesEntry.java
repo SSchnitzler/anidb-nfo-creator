@@ -78,13 +78,15 @@ public class SeriesEntry implements Serializable {
 	}
 	
 	public void setRating(int new_rating) {
-		float temp = new_rating/100;
+		float temp = new_rating/100.0f;
 		
 		if (temp < 0.0f)
 			temp = 0.0f;
 		
 		if (temp > 10.0f)
 			temp = 10.0f;
+		
+		rating = temp;
 	}
 	
 	public void setPlot(String nPlot) {
