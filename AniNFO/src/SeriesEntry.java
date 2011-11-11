@@ -33,6 +33,7 @@ public class SeriesEntry implements Serializable {
 	private String					plot;			// Series plot
 	private LinkedList<String>		genre;			// Series Genre List
 	private int						genreCount;		// Count of genre entries
+	private float					rating;			// Series rating
 	private EpisodeList				episodes;		// Listing of episodes sin the series
 	
 	public SeriesEntry(String nTitle, int nAid) {
@@ -41,6 +42,8 @@ public class SeriesEntry implements Serializable {
 		plot = null;							// null plot
 		genre = new LinkedList<String>();		// empty list of genres
 		genreCount = 0;							// Initialize count of genre entries
+		rating = 0.0f;							// Set rating to 0 by default
+		episodes = new EpisodeList();			// Generate an empty episode list
 	} // end SeriesEntry(title)
 	
 	public int getAID() {
@@ -69,6 +72,20 @@ public class SeriesEntry implements Serializable {
 		// Return the genre list (null if empty
 		return result;
 	} // end getGenre
+	
+	public float getRating() {
+		return rating;
+	}
+	
+	public void setRating(int new_rating) {
+		float temp = new_rating/100;
+		
+		if (temp < 0.0f)
+			temp = 0.0f;
+		
+		if (temp > 10.0f)
+			temp = 10.0f;
+	}
 	
 	public void setPlot(String nPlot) {
 		plot = nPlot;

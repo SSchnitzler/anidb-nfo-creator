@@ -64,8 +64,12 @@ public class CommMgr {
 	public static final int			NOT_LOGGED_IN				= 	403;
 	
 	// ANIME codes
-	public static final int			ANIME_SUCCESS				= 	230;
-	public static final int			ANIME_NOT_FOUND				=	330;
+	public static final int			ANIME_FOUND					= 	230;
+	public static final int			NO_SUCH_ANIME				=	330;
+	
+	// EPISODE codes
+	public static final int			EPISODE_FOUND				=	240;
+	public static final int			NO_SUCH_EPISODE				=	340;
 	
 	// Client generated codes
 	public static final int			CLIENT_ERROR				= 	000;
@@ -172,7 +176,7 @@ public class CommMgr {
 		} // end if
 		
 		// Build data for LOGOUT packet
-		String msg = "";
+		String msg = "s=" + sessionID;
 		
 		// Send LOGOUT packet
 		response = sendPacket("LOGOUT", msg);

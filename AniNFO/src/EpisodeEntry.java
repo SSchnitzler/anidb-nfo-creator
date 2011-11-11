@@ -28,7 +28,6 @@ public class EpisodeEntry implements Serializable {
 	private int epno;				// Episode Number (can include characters S, C, T, O to define type)
 	private int season;				// Episode Season, used for special episodes in Boxee
 	private int length;				// Length of the episode
-	private float rating;			// Episode rating (scale 0 - 10)
 	private String title;			// Episode title
 	private int aired;				// Date the episode aired
 	
@@ -38,7 +37,6 @@ public class EpisodeEntry implements Serializable {
 		epno = 1;
 		season = 1;
 		length = 24;
-		rating = 0.0f;
 		title = null;
 		aired = 0;
 	} // end constructor
@@ -76,22 +74,6 @@ public class EpisodeEntry implements Serializable {
 		length = new_length;
 	}
 	
-	public void setRating(int new_rating) {
-		// Convert AniDB int based rating to
-		// correct float based rating
-		float temp = (new_rating/100);
-		
-		// Ensure that rating falls between 0 and 10
-		if (temp > 10.0f)
-			temp = 10.0f;
-		
-		if (temp < 0.0f)
-			temp = 0.0f;
-		
-		// Set rating value
-		rating = temp;
-	}
-	
 	public void setTitle(String new_title) {
 		title = new_title;
 	}
@@ -110,10 +92,6 @@ public class EpisodeEntry implements Serializable {
 	
 	public int getSeason() {
 		return season;
-	}
-	
-	public float getRating() {
-		return rating;
 	}
 	
 	public String getTitle() {

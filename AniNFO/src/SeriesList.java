@@ -72,13 +72,14 @@ public class SeriesList implements Serializable {
 
 	public EpisodeEntry getEpisode(int sAid, int epno) {
 		SeriesEntry temp = getSeries(sAid);
-		
 		if (temp == null)
 			return null;
 		
 		EpisodeList epList = temp.getEpisodes();
-		EpisodeEntry episode = epList.getEpisode(epno);
+		if (epList == null)
+			return null;
 		
+		EpisodeEntry episode = epList.getEpisode(epno);
 		if (episode == null)
 			return null;
 		

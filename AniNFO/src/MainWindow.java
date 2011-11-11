@@ -23,8 +23,12 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.LinkedList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -354,7 +358,7 @@ public class MainWindow extends JFrame implements ActionListener {
 		// Get the AniDB titles and id from downloaded title list
 		getTitles();
 		// Get full details from AniDB site
-		//getDetails();
+		getDetails();
 		
 		// Refresh the file listing
 		infoPanel.refreshFileList();
@@ -460,20 +464,22 @@ public class MainWindow extends JFrame implements ActionListener {
 			// If there is more than one title matched provide a list to select
 			// from.
 			if (titles.size() > 1) {
-				TitleSelector tsWnd = new TitleSelector(titles);
+				TitleSelectorDlg tsWnd = new TitleSelectorDlg(titles);
 				AnimeTitle title = tsWnd.showDialog();
 				
 				if (title != null)
 					linkFileDetails(fileTitles.get(i), title);
 				else
-					JOptionPane.showMessageDialog(this,	"No anime title was selected from the list.", "Error - No Selection Made", JOptionPane.ERROR_MESSAGE);
+					JOptionPane.showMessageDialog(this,	"No anime title was selected from the list.", 
+							"Error - No Selection Made", JOptionPane.ERROR_MESSAGE);
 			} // end if
 			// Only 1 match was found, just use it.
 			else if (titles.size() != 0) {
 				linkFileDetails(fileTitles.get(i), titles.getFirst());
 			} // end else
 			else {
-				JOptionPane.showMessageDialog(this, "There were no matching anime titles found in the database.", "Error - No Match Found", JOptionPane.ERROR_MESSAGE);
+				JOptionPane.showMessageDialog(this, "There were no matching anime titles found in the database.", 
+						"Error - No Match Found", JOptionPane.ERROR_MESSAGE);
 			}
 		} // end for
 	} // end getTitles
@@ -513,16 +519,27 @@ public class MainWindow extends JFrame implements ActionListener {
 				String reply = response.getReply();
 
 				// If the response is successful
-				if (code == CommMgr.ANIME_SUCCESS) {
-					String values[] = reply.split("|");
+				if (code == CommMgr.ANIME_FOUND) {
+					String details = reply.substring(reply.indexOf('\n')).trim();
+					String[] values = details.split("\\|");
 					String title = values[14];
 					series = new SeriesEntry(title, aid);
+					
+					int rating = Integer.parseInt(values[4]);
+					series.setRating(rating);
 					
 					String genre[] = values[18].split(",");
 					for (int g = 0; g < genre.length; g++)
 						series.addGenre(genre[g]);
 					
-					seriesCache.addSeries(series);
+					int result = seriesCache.addSeries(series);
+					
+					// Verify it was added to the cache
+					if (result != SeriesList.SUCCESS) {
+						JOptionPane.showMessageDialog(this, "There was an error when adding the series to the cache.", 
+								"Error - Unable to update cache", JOptionPane.ERROR_MESSAGE);
+						return;
+					}
 				}
 				else {
 					switch (code) {
@@ -576,7 +593,7 @@ public class MainWindow extends JFrame implements ActionListener {
 						msg = "The session ID is invalid.\nPlease try restarting the AniDB client.";
 						eTitle = "Invalid Session";
 						break;
-					case CommMgr.ANIME_NOT_FOUND:
+					case CommMgr.NO_SUCH_ANIME:
 						msg = "The anime series was not found in the AniDB database.\nSeries ID: " + aid;
 						eTitle = "Invalid Session";
 						break;
@@ -587,6 +604,7 @@ public class MainWindow extends JFrame implements ActionListener {
 					} // end switch
 					
 					JOptionPane.showMessageDialog(this, msg, "Error - " + eTitle, JOptionPane.ERROR_MESSAGE);
+					return;		// End execution due to error
 				} // end else (error)
 			} // end if (series==null)
 		} // end for (seriesList)
@@ -606,11 +624,143 @@ public class MainWindow extends JFrame implements ActionListener {
 				checkDB.add(file);
 			} // end if
 		} // end for
-	}
+		
+		// Process unfound episodes
+		for (int i = 0; i < checkDB.size(); i++) {
+			FileDetails file = checkDB.get(i);
+			int aid = file.getAID();
+			int epno = file.getEpno();
+			
+			// Enforce packet delay
+			if (i > 0) {
+				try {
+					Thread.sleep(2000);
+				}
+				catch (InterruptedException e) {
+					System.err.println("Thread was interrupted... this shouldn't happen though..");
+				}
+			}
+			
+			AniPacket response = CommMgr.sendEpisode(aid, epno);
+			int code = response.getCode();
+			String reply = response.getReply();
+			
+			// If the response is successful
+			if (code == CommMgr.EPISODE_FOUND) {
+				String details = reply.substring(reply.indexOf('\n')).trim();
+				String[] values = details.split("\\|");
+				
+				for (int idx = 0; idx < values.length; idx++)
+					System.out.print("VALUES[" + idx + "] = " + values[idx] + "; ");
+				System.out.println();
+				
+				
+				int eid = Integer.parseInt(values[0]);
+				int length = Integer.parseInt(values[2]);
+				String eps = values[5];
+				String title = values[6];
+				int aired = Integer.parseInt(values[9]);
+				
+				EpisodeEntry episode = new EpisodeEntry(eid);
+				episode.setEpno(eps);
+				episode.setTitle(title);
+				episode.setLength(length);
+				episode.setAired(aired);
+				
+				SeriesEntry series = seriesCache.getSeries(aid);
+				series.getEpisodes().addEpisode(episode);
+			}
+			else {
+				String msg;
+				String eTitle;
+				String reason; 
+				
+				switch (code) {
+				case CommMgr.CLIENT_ERROR:
+					msg = reply;
+					eTitle = "Client Error";
+					break;
+				case CommMgr.ILLEGAL_INPUT_ACCESS_DENIED:	
+					msg = "The server did not recognize the data sent.";
+					eTitle = "Illegal Input";
+					break;
+				case CommMgr.INTERNAL_SERVER_ERROR:
+					msg = "An internal server error was encountered";
+					eTitle = "Internal Server Error";
+					break;
+				case CommMgr.OUT_OF_SERVICE:
+					msg = "The server is currently down for maintenance.\nPlease try again later.";
+					eTitle = "Server Out of Service";
+					break;
+				case CommMgr.SERVER_BUSY:
+					msg = "The server is too busy to process your request at this time.\nPlease try again later.";
+					eTitle = "Server Busy";
+					break;
+				case CommMgr.UNKNOWN_COMMAND:
+					msg = "The command was not recongnized by the server.";
+					eTitle = "Unknown Command";
+					break;
+				case CommMgr.BANNED:
+					reason = reply.substring(reply.indexOf('\n'));
+					msg = "Your account has been banned by the AniDB server.\nReason: " + reason;
+					eTitle = "Account Banned";
+					break;
+				case CommMgr.CLIENT_OUTDATED:
+					msg = "The client uses an outdated version of the AniDB API.\nPlease update your client.";
+					eTitle = "Version Outdated";
+					break;
+				case CommMgr.CLIENT_BANNED:
+					reason = reply.substring(reply.indexOf('-')+2);
+					msg = "This client has been banned.\nReason: " + reason;
+					eTitle = "Client Banned";
+					break;
+				case CommMgr.LOGIN_REQUIRED:
+					msg = "The AniNFO client is not currently logged into the AniDB server.\nPlease check your username and password in Preferences.";
+					eTitle = "Login Required";
+					break;
+				case CommMgr.ACCESS_DENIED:
+					msg = "Access to the AniDB server has been denied.\nPlease check your username and password in Preferences.";
+					eTitle = "Access Denied";
+					break;
+				case CommMgr.INVALID_SESSION:
+					msg = "The session ID is invalid.\nPlease try restarting the AniDB client.";
+					eTitle = "Invalid Session";
+					break;
+				case CommMgr.NO_SUCH_EPISODE:
+					msg = "The anime series was not found in the AniDB database.\nSeries ID: " + aid;
+					eTitle = "Invalid Session";
+					break;
+				default:
+					msg = "An unknown error has occurred.\nCode: " + code + "\nReply: " + reply;
+					eTitle = "Unknown Error";
+					break;
+				} // end switch
+				
+				// Display error
+				JOptionPane.showMessageDialog(this, msg, eTitle, JOptionPane.ERROR_MESSAGE);
+				return;		// End execution because there was an error
+			} // end else
+		} // end for
+		
+		// Disconnect from AniDB
+		CommMgr.sendLogout();
+	} // end getDetails
 	
 	@Override
 	public void dispose() {
-		CommMgr.sendLogout();
+		// Write the cache file to disk to be loaded later
+		File file = new File(CACHE_FILE);
+		try {
+			FileOutputStream fos = new FileOutputStream(file);
+			ObjectOutputStream out = new ObjectOutputStream(fos);
+			out.writeObject(seriesCache);
+		}
+		catch (IOException e) {
+			JOptionPane.showMessageDialog(this,	"Unable to update the cache file.\nYour cache file may be corrupt and is being deleted.",
+					"Error - Unable to Update Cache", JOptionPane.ERROR_MESSAGE);
+			file.delete();
+		}
+		
 		super.dispose();
 	} // end dispose
 	
@@ -720,21 +870,33 @@ public class MainWindow extends JFrame implements ActionListener {
 		} // end refreshFileList
 		
 		public void setDetails(FileDetails file) {
-			String text = "Series: " + file.getSeries() + "\n";
-			
-			// If the AID was found for this anime
-			if (file.getAID() > 0) {
-				text += "AniDB AId: " + file.getAID() + "\n";
-			}
-			// Additional details for series episodes
-			if (!file.isMovie()) {
-				text += "Season: " + file.getSeason() + "\n";
-				text += "Episode: " + file.getEpno() + "\n";
-			}
-			
-			// Display the filename and path details of this file
+			String text;			// The text to display
+			// File information
+			text = "--FILE DETAILS--\n";
 			text += "Filename: " + file.getName() + "\n"; 
 			text += "Path: " + file.getPath() + "\n";
+			
+			// Series Information
+			SeriesEntry series = seriesCache.getSeries(file.getAID());
+			text += "\n--SERIES DETAILS--\n";
+			text += "Series ID: " + series.getAID() + "\n";
+			text += "Series Title: " + series.getTitle() + "\n";
+			text += "Series Rating: " + series.getRating() + "\n";
+			text += "Series Genre: " + series.getGenre() + "\n";
+			
+			// Episode Information
+			EpisodeEntry episode = series.getEpisodes().getEpisode(file.getEpno());
+			text += "\n--EPISODE DETAILS--\n";
+			text += "Episode ID: " + episode.getEID() +"\n";
+			text += "Season " + episode.getSeason() + " Episode " + episode.getEpno() + "\n";
+			text += "Episode Title: " + episode.getTitle() + "\n";
+			text += "Episode Length: " + episode.getLength() + "m\n";
+			
+			// Displaying the date requires some formatting
+			SimpleDateFormat sdf = new SimpleDateFormat("YYYY-MM-DD");
+			Date date = new Date(episode.getAired());
+			String aired = sdf.format(date);
+			text += "Episode Air Date: " + aired + "\n";
 			
 			seriesText.setText(text);
 			seriesText.repaint();
@@ -750,7 +912,7 @@ public class MainWindow extends JFrame implements ActionListener {
 		
 	} // end class InfoPanel
 	
-	class TitleSelector extends JDialog implements ActionListener {
+	class TitleSelectorDlg extends JDialog implements ActionListener {
 		
 		/*** CONSTANTS ***/
 		private static final long serialVersionUID = 1L;
@@ -766,7 +928,7 @@ public class MainWindow extends JFrame implements ActionListener {
 		AnimeTitle	selectedTitle;		// The selected anime title
 		
 		// Constructor
-		public TitleSelector(AnimeTitles newList) {
+		public TitleSelectorDlg(AnimeTitles newList) {
 			// Set the window title
 			this.setTitle("Anime Title Selection");
 			
