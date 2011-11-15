@@ -532,6 +532,7 @@ public class MainWindow extends JFrame implements ActionListener {
 					String details = reply.substring(reply.indexOf('\n')).trim();
 					String[] values = details.split("\\|");
 					String title = values[14];
+					String plot;
 					
 					if (title.equals("")) {
 						AnimeTitle anime = animeTitles.searchTitles(aid);
@@ -546,6 +547,10 @@ public class MainWindow extends JFrame implements ActionListener {
 					String genre[] = values[18].split(",");
 					for (int g = 0; g < genre.length; g++)
 						series.addGenre(genre[g]);
+					
+					System.out.println("Requesting plot info");
+					plot = getPlot(aid);
+					series.setPlot(plot);
 					
 					int result = seriesCache.addSeries(series);
 					
@@ -737,7 +742,7 @@ public class MainWindow extends JFrame implements ActionListener {
 					eTitle = "Invalid Session";
 					break;
 				case CommMgr.NO_SUCH_EPISODE:
-					msg = "The anime series was not found in the AniDB database.\nSeries ID: " + aid;
+					msg = "The anime episode was not found in the AniDB database.\nSeries ID: " + aid + " Episode: " + epno;
 					eTitle = "Invalid Session";
 					break;
 				default:
@@ -758,6 +763,130 @@ public class MainWindow extends JFrame implements ActionListener {
 		// Disconnect from AniDB
 		CommMgr.sendLogout();
 	} // end getDetails
+	
+	private String getPlot(int aid) {
+		String result = "";
+		
+		AniPacket packet;
+		int code;
+		String reply;
+		int part = 0;
+		int count = 0;
+		String piece;
+		
+		
+		System.out.println("Part: " + part + "; Count: " + count);
+		// Get all parts of the plot
+		do {
+			System.out.println("Executing loop...");
+			// Sleep for 2s to prevent flooding ban
+			try {
+				Thread.sleep(2000);
+			}
+			catch (InterruptedException e) {
+				// do nothing
+			}
+			
+			packet = CommMgr.sendAnimeDesc(aid, part);
+			code = packet.getCode();
+			reply = packet.getReply();
+			
+			if (!packet.isError()) {
+				part++;			// Increment part counter
+				reply = reply.substring(reply.indexOf('\n'));
+				String[] values = reply.split("\\|");
+				
+				count = Integer.parseInt(values[1]);
+				piece = values[2];
+				
+				// If this is not the last part, remove <cut> from end
+				// of the string
+				if (count > part) {
+					result += piece.substring(0, piece.lastIndexOf(' '));
+				}
+				else {
+					result += piece;
+				} // end if count
+			} // end if !error
+			else {
+				String msg;
+				String eTitle;
+				String reason; 
+				
+				switch (code) {
+				case CommMgr.CLIENT_ERROR:
+					msg = reply;
+					eTitle = "Client Error";
+					break;
+				case CommMgr.ILLEGAL_INPUT_ACCESS_DENIED:	
+					msg = "The server did not recognize the data sent.";
+					eTitle = "Illegal Input";
+					break;
+				case CommMgr.INTERNAL_SERVER_ERROR:
+					msg = "An internal server error was encountered";
+					eTitle = "Internal Server Error";
+					break;
+				case CommMgr.OUT_OF_SERVICE:
+					msg = "The server is currently down for maintenance.\nPlease try again later.";
+					eTitle = "Server Out of Service";
+					break;
+				case CommMgr.SERVER_BUSY:
+					msg = "The server is too busy to process your request at this time.\nPlease try again later.";
+					eTitle = "Server Busy";
+					break;
+				case CommMgr.UNKNOWN_COMMAND:
+					msg = "The command was not recongnized by the server.";
+					eTitle = "Unknown Command";
+					break;
+				case CommMgr.BANNED:
+					reason = reply.substring(reply.indexOf('\n'));
+					msg = "Your account has been banned by the AniDB server.\nReason: " + reason;
+					eTitle = "Account Banned";
+					break;
+				case CommMgr.CLIENT_OUTDATED:
+					msg = "The client uses an outdated version of the AniDB API.\nPlease update your client.";
+					eTitle = "Version Outdated";
+					break;
+				case CommMgr.CLIENT_BANNED:
+					reason = reply.substring(reply.indexOf('-')+2);
+					msg = "This client has been banned.\nReason: " + reason;
+					eTitle = "Client Banned";
+					break;
+				case CommMgr.LOGIN_REQUIRED:
+					msg = "The AniNFO client is not currently logged into the AniDB server.\nPlease check your username and password in Preferences.";
+					eTitle = "Login Required";
+					break;
+				case CommMgr.ACCESS_DENIED:
+					msg = "Access to the AniDB server has been denied.\nPlease check your username and password in Preferences.";
+					eTitle = "Access Denied";
+					break;
+				case CommMgr.INVALID_SESSION:
+					msg = "The session ID is invalid.\nPlease try restarting the AniDB client.";
+					eTitle = "Invalid Session";
+					break;
+				case CommMgr.NO_SUCH_ANIME:
+					msg = "The anime series was not found in the AniDB database.\nSeries ID: " + aid;
+					eTitle = "Invalid Session";
+					break;
+				case CommMgr.NO_SUCH_DESC:
+					msg = "The requested description part could not be found.\nSeries ID: " + aid + " Part: " +  part;
+					eTitle = "Invalid Session";
+					break;
+				default:
+					msg = "An unknown error has occurred.\nCode: " + code + "\nReply: " + reply;
+					eTitle = "Unknown Error";
+					break;
+				} // end switch
+				
+				// Display error
+				JOptionPane.showMessageDialog(this, msg, eTitle, JOptionPane.ERROR_MESSAGE);
+				return "";		// End execution because there was an error
+			} // end else
+			
+		} while (part < count); // end while
+		
+		return result;
+	} // end getPlot
 	
 	@Override
 	public void dispose() {
@@ -898,6 +1027,7 @@ public class MainWindow extends JFrame implements ActionListener {
 			text += "Series Title: " + series.getTitle() + "\n";
 			text += "Series Rating: " + series.getRating() + "\n";
 			text += "Series Genre: " + series.getGenre() + "\n";
+			text += "Series Plot:\n" + series.getPlot() + "\n";
 			
 			// Episode Information
 			EpisodeEntry episode = series.getEpisodes().getEpisode(file.getEpno());

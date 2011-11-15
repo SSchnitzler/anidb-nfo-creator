@@ -71,6 +71,10 @@ public class CommMgr {
 	public static final int			EPISODE_FOUND				=	240;
 	public static final int			NO_SUCH_EPISODE				=	340;
 	
+	// ANIMEDESC Codes
+	public static final int			DESC_FOUND					=	233;
+	public static final int			NO_SUCH_DESC				= 	333;
+	
 	// Client generated codes
 	public static final int			CLIENT_ERROR				= 	000;
 	
