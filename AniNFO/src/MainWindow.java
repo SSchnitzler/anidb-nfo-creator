@@ -22,9 +22,11 @@ import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -908,6 +910,83 @@ public class MainWindow extends JFrame implements ActionListener {
 		super.dispose();
 	} // end dispose
 	
+	private void createNFOFiles() {
+		LinkedList<Integer>		aidList;			// List of series already generated
+		aidList = new LinkedList<Integer>();
+		
+		// Process through the list of files
+		for (int i = 0; i < fileDetails.size(); i++) {
+			FileDetails file = fileDetails.get(i);
+			int aid = file.getAID();
+			int epno = file.getEpno();
+			String path = file.getPath();
+			
+			if (!aidList.contains(aid)) {
+				aidList.add(aid);
+				SeriesEntry series = seriesCache.getSeries(aid);
+				createSeriesNFO(series, path);
+			} // end if (series)
+			
+			EpisodeEntry episode = seriesCache.getEpisode(aid, epno);
+			createEpisodeNFO(episode, file);
+		} // end for (fileDetails)
+	} // end createNFOFiles
+	
+	private void createSeriesNFO(SeriesEntry series, String path) {
+		try {
+			FileWriter fos = new FileWriter(path + File.separator + "tvshow.nfo");
+			BufferedWriter out = new BufferedWriter(fos);
+			
+			out.write("<tvshow>\n");
+			out.write("<id>" + series.getAID() + "</id>\n");
+			out.write("<title>" + series.getTitle() + "</title>\n");
+			out.write("<plot>" + series.getPlot() + "</plot>\n");
+			out.write("<genre>" + series.getGenre() + "</genre>\n");
+			out.write("<rating>" + series.getRating() + "</rating>\n");
+			out.write("</tvshow>\n");
+			
+			out.close();
+			fos.close();
+		} // end try
+		catch (IOException e) {
+			JOptionPane.showMessageDialog(this, "Unable to write tvshow.nfo file for " + series.getTitle(), 
+					"Error - Unable to Write To File", JOptionPane.ERROR_MESSAGE);
+		} // end catch
+	} // end createSeriesNFO
+	
+	private void createEpisodeNFO(EpisodeEntry episode, FileDetails file) {
+		String filename = file.getName();
+		filename = filename.substring(0, filename.length() - 3);
+		filename += "nfo";
+		String path = file.getPath();
+		
+		// Format the aired date
+		SimpleDateFormat sdf = new SimpleDateFormat("MMM d, yyyy");
+		Calendar cal = Calendar.getInstance();
+		cal.setTimeInMillis(episode.getAired());
+		String aired = sdf.format(cal.getTime());
+		
+		try {
+			FileWriter fos = new FileWriter(path + File.separator + filename);
+			BufferedWriter out = new BufferedWriter(fos);
+
+			out.write("<episodedetails>\n");
+			out.write("<title>" + episode.getTitle() + "</title>\n");
+			out.write("<season>" + episode.getSeason() + "</season>\n");
+			out.write("<episode>" + episode.getEpno() + "</episode>\n");
+			out.write("<runtime>" + episode.getLength() + " mins</runtime>\n");
+			out.write("<aired>" + aired + "</aired>\n");
+			out.write("</episodedetails>\n");
+			
+			out.close();
+			fos.close();
+		} // end try
+		catch (IOException e) {
+			JOptionPane.showMessageDialog(this, "Unable to write to file " + filename, 
+					"Error - Unable to Write To File", JOptionPane.ERROR_MESSAGE);
+		} // end IOException
+	} // end createEpisodeNFO
+		
 	@Override
 	public void actionPerformed(ActionEvent e) {
 		// Handle Open menu item
@@ -943,7 +1022,9 @@ public class MainWindow extends JFrame implements ActionListener {
 		// Button Responses
 		// Create Button
 		if (e.getSource() == bCreate) {
-			//// Create the files - Code needs to be added ////
+			// Create the NFO files
+			createNFOFiles();
+			
 			// Empty the file list
 			fileTitles = new LinkedList<String>();
 			fileDetails = new LinkedList<FileDetails>();
@@ -1015,35 +1096,41 @@ public class MainWindow extends JFrame implements ActionListener {
 		
 		public void setDetails(FileDetails file) {
 			String text;			// The text to display
-			// File information
-			text = "--FILE DETAILS--\n";
-			text += "Filename: " + file.getName() + "\n"; 
-			text += "Path: " + file.getPath() + "\n";
 			
-			// Series Information
-			SeriesEntry series = seriesCache.getSeries(file.getAID());
-			text += "\n--SERIES DETAILS--\n";
-			text += "Series ID: " + series.getAID() + "\n";
-			text += "Series Title: " + series.getTitle() + "\n";
-			text += "Series Rating: " + series.getRating() + "\n";
-			text += "Series Genre: " + series.getGenre() + "\n";
-			text += "Series Plot:\n" + series.getPlot() + "\n";
-			
-			// Episode Information
-			EpisodeEntry episode = series.getEpisodes().getEpisode(file.getEpno());
-			text += "\n--EPISODE DETAILS--\n";
-			text += "Episode ID: " + episode.getEID() +"\n";
-			text += "Season " + episode.getSeason() + " Episode " + episode.getEpno() + "\n";
-			text += "Episode Title: " + episode.getTitle() + "\n";
-			text += "Episode Length: " + episode.getLength() + "m\n";
-			
-			// Displaying the date requires some formatting
-			SimpleDateFormat sdf = new SimpleDateFormat("MMM d, yyyy");
-			Calendar cal = Calendar.getInstance();
-			cal.setTimeInMillis(episode.getAired());
-			String aired = sdf.format(cal.getTime());
-			text += "Episode Air Date: " + aired + "\n";
-			
+			if (file == null) {
+				text = "";
+			}
+			else {
+				// File information
+				text = "--FILE DETAILS--\n";
+				text += "Filename: " + file.getName() + "\n"; 
+				text += "Path: " + file.getPath() + "\n";
+				
+				// Series Information
+				SeriesEntry series = seriesCache.getSeries(file.getAID());
+				text += "\n--SERIES DETAILS--\n";
+				text += "Series ID: " + series.getAID() + "\n";
+				text += "Series Title: " + series.getTitle() + "\n";
+				text += "Series Rating: " + series.getRating() + "\n";
+				text += "Series Genre: " + series.getGenre() + "\n";
+				text += "Series Plot:\n" + series.getPlot() + "\n";
+				
+				// Episode Information
+				EpisodeEntry episode = series.getEpisodes().getEpisode(file.getEpno());
+				text += "\n--EPISODE DETAILS--\n";
+				text += "Episode ID: " + episode.getEID() +"\n";
+				text += "Season " + episode.getSeason() + " Episode " + episode.getEpno() + "\n";
+				text += "Episode Title: " + episode.getTitle() + "\n";
+				text += "Episode Length: " + episode.getLength() + "m\n";
+				
+				// Displaying the date requires some formatting
+				SimpleDateFormat sdf = new SimpleDateFormat("MMM d, yyyy");
+				Calendar cal = Calendar.getInstance();
+				cal.setTimeInMillis(episode.getAired());
+				String aired = sdf.format(cal.getTime());
+				text += "Episode Air Date: " + aired + "\n";
+			} // end else
+		
 			seriesText.setText(text);
 			seriesText.repaint();
 		}
