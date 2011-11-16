@@ -78,6 +78,9 @@ public class CommMgr {
 	// Client generated codes
 	public static final int			CLIENT_ERROR				= 	000;
 	
+	// Anime Mask
+	public static final String		AMASK_VALUE					= "822002800000";
+	
 	/*** CLASS DATA MEMBERS ***/
 	private static String			sessionID	= null;		// The session ID assigned for this session.
 	private static boolean			connected	= false;	// Are we connected/authenticated?
@@ -198,6 +201,7 @@ public class CommMgr {
 		String		msg;			// The packet to send
 		
 		msg = "aid=" + String.valueOf(aid);
+		msg += "&amask=" + AMASK_VALUE;
 		msg += "&s=" + sessionID;
 		
 		response = sendPacket("ANIME", msg);

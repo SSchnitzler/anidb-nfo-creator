@@ -25,7 +25,8 @@ import javax.swing.JOptionPane;
 public class SeriesEntry implements Serializable {
 	
 	/*** CONSTANTS ***/
-	private static final long serialVersionUID = -3161937020365620069L;			// Seriali ID
+	private static final long serialVersionUID = -3161937020365620069L;			// Serial ID
+	private static final String 	PIC_URL		= "http://img7.anidb.net/pics/anime/";
 	
 	/*** CLASS DATA MEMBERS ***/
 	private int						aid;			// AniDB ID
@@ -35,6 +36,7 @@ public class SeriesEntry implements Serializable {
 	private int						genreCount;		// Count of genre entries
 	private float					rating;			// Series rating
 	private EpisodeList				episodes;		// Listing of episodes sin the series
+	private String					picname;		// thumbnail file name
 	
 	public SeriesEntry(String nTitle, int nAid) {
 		aid = nAid;								// Set aid
@@ -57,6 +59,10 @@ public class SeriesEntry implements Serializable {
 	public String getPlot() {
 		return plot;
 	} // end getPlot
+	
+	public String getThumb() {
+		return picname;
+	}
 	
 	public String getGenre() {
 		String result = null;
@@ -87,6 +93,10 @@ public class SeriesEntry implements Serializable {
 			temp = 10.0f;
 		
 		rating = temp;
+	}
+	
+	public void setThumb(String pic) {
+		picname = PIC_URL + pic;
 	}
 	
 	public void setPlot(String nPlot) {

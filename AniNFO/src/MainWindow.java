@@ -533,7 +533,7 @@ public class MainWindow extends JFrame implements ActionListener {
 				if (code == CommMgr.ANIME_FOUND) {
 					String details = reply.substring(reply.indexOf('\n')).trim();
 					String[] values = details.split("\\|");
-					String title = values[14];
+					String title = values[2];
 					String plot;
 					
 					if (title.equals("")) {
@@ -546,7 +546,9 @@ public class MainWindow extends JFrame implements ActionListener {
 					int rating = Integer.parseInt(values[4]);
 					series.setRating(rating);
 					
-					String genre[] = values[18].split(",");
+					series.setThumb(values[3]);
+					
+					String genre[] = values[1].split(",");
 					for (int g = 0; g < genre.length; g++)
 						series.addGenre(genre[g]);
 					
@@ -776,11 +778,8 @@ public class MainWindow extends JFrame implements ActionListener {
 		int count = 0;
 		String piece;
 		
-		
-		System.out.println("Part: " + part + "; Count: " + count);
 		// Get all parts of the plot
 		do {
-			System.out.println("Executing loop...");
 			// Sleep for 2s to prevent flooding ban
 			try {
 				Thread.sleep(2000);
@@ -943,6 +942,7 @@ public class MainWindow extends JFrame implements ActionListener {
 			out.write("<plot>" + series.getPlot() + "</plot>\n");
 			out.write("<genre>" + series.getGenre() + "</genre>\n");
 			out.write("<rating>" + series.getRating() + "</rating>\n");
+			out.write("<thumb>" + series.getThumb() + "</thumb>\n");
 			out.write("</tvshow>\n");
 			
 			out.close();
@@ -1098,7 +1098,7 @@ public class MainWindow extends JFrame implements ActionListener {
 			String text;			// The text to display
 			
 			if (file == null) {
-				text = "";
+				text = "Nothing selected.\n";
 			}
 			else {
 				// File information
@@ -1112,6 +1112,7 @@ public class MainWindow extends JFrame implements ActionListener {
 				text += "Series ID: " + series.getAID() + "\n";
 				text += "Series Title: " + series.getTitle() + "\n";
 				text += "Series Rating: " + series.getRating() + "\n";
+				text += "Series Pic: " + series.getThumb() + "\n";
 				text += "Series Genre: " + series.getGenre() + "\n";
 				text += "Series Plot:\n" + series.getPlot() + "\n";
 				
