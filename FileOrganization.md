@@ -1,0 +1,3 @@
+# File Organization #
+
+When organizing your files, it would be recommended that you create a parent directory for your videos and within this a directory for each series. In each series directory place all of the files for that series, and only the video files as it does not currently filter video files from others except for ignoring NFO files. AniNFO will place the created NFO files into the folder the files are stored in. Also, since each series gets a file named tvshow.nfo if more than one series is in a folder it will cause one file to be overwritten by the other.
